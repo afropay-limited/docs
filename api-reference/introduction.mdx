@@ -1,0 +1,101 @@
+---
+title: "AfroPay Mobile Money REST API Reference for Africa"
+sidebarTitle: "Overview"
+description: "AfroPay's mobile money REST API moves funds across African networks like M-PESA and Airtel Money. Reference for C2B, B2C, and status endpoints."
+---
+
+The AfroPay Mobile Money API is a JSON-over-HTTPS REST API that lets you move money between your business and your customers across mobile money rails such as M-PESA and Airtel Money. All requests must include a `Content-Type: application/json` header, and all responses share the same JSON envelope format. This reference covers every public endpoint — read on to understand base URLs, authentication, the response envelope, and error handling before diving into the individual endpoint pages.
+
+## Base URLs
+
+Point your HTTP client at the appropriate base URL for your environment.
+
+| Environment | Base URL |
+| --- | --- |
+| Production | `https://api.afro-pay.africa` |
+| Sandbox | `https://api-sandbox.afro-pay.africa` |
+
+<Info>
+  Use the **Sandbox** environment for all development and testing. It mirrors the Production API but does not move real funds.
+</Info>
+
+## Authentication
+
+The C2B collection and B2C payout endpoints require a valid OAuth2 bearer token in the `Authorization` header. The transaction status endpoint (`GET /api/v1/transaction/{referenceId}`) is public and does not require a token.
+
+```http
+Authorization: Bearer <access_token>
+```
+
+See [Authentication](/authentication) to learn how to obtain a token using your client credentials.
+
+<Warning>
+  Never expose your client secret or bearer token in client-side code or public repositories. Rotate compromised credentials immediately from your AfroPay dashboard.
+</Warning>
+
+## Response Envelope
+
+Every endpoint returns the same JSON envelope, regardless of whether the request succeeded or failed. Always check the `status` field in the response body — an HTTP `200` means the request was received, but the business-level outcome is encoded inside the envelope.
+
+```json
+{
+  "status": "00",
+  "message": "Payment request received",
+  "data": {
+    "retrievalReferenceNo": "RRN-7F3A9C2B10",
+    "merchantReferenceId": "ORD-2026-0001"
+  }
+}
+```
+
+<ResponseField name="status" type="string">
+  `"00"` indicates success or acceptance; `"01"` indicates failure or rejection.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  A human-readable string describing the result — useful for logging and surfacing errors to your support team.
+</ResponseField>
+
+<ResponseField name="data" type="object | null">
+  The endpoint-specific payload on success. Returns `null` when `status` is `"01"`.
+</ResponseField>
+
+<Note>
+  Both the C2B and B2C flows are **asynchronous**. A `status: "00"` response confirms that AfroPay accepted your request, not that the funds have moved. The final outcome is delivered to your `notificationUrl` webhook and can also be polled via the transaction status endpoint.
+</Note>
+
+## Endpoints
+
+<CardGroup cols={1}>
+  <Card title="POST /api/v1/c2b — Collect from a customer (C2B)" icon="arrow-down-to-line">
+    Initiate a Customer-to-Business collection. AfroPay triggers an STK push or USSD prompt on the customer's handset. The customer approves the debit, and the outcome is delivered to your webhook.
+  </Card>
+
+  <Card title="POST /api/v1/b2c — Pay out to a customer (B2C)" icon="arrow-up-from-line">
+    Initiate a Business-to-Customer payout. AfroPay disburses funds from your account directly to the recipient's mobile wallet. The outcome is delivered to your webhook.
+  </Card>
+
+  <Card title="GET /api/v1/transaction/{referenceId} — Query transaction status" icon="magnifying-glass">
+    Retrieve the current state of any transaction using its `retrievalReferenceNo`. Use this to poll for a terminal state or to reconcile transactions when a webhook is not received.
+  </Card>
+</CardGroup>
+
+## Error Handling
+
+AfroPay uses standard HTTP status codes. A `200` response does not guarantee a successful business outcome — always inspect the `status` field in the envelope.
+
+| HTTP Status | Meaning |
+| --- | --- |
+| `200` | **Accepted** — the request was well-formed and received. Inspect `status` in the body for the business-level result. |
+| `400` | **Bad Request** — malformed JSON or one or more required fields are missing. Fix the request before retrying. |
+| `401` | **Unauthorized** — the `Authorization` header is missing or the bearer token has expired. [Obtain a fresh token](/authentication) and retry. |
+| `403` | **Forbidden** — your token is valid but does not have permission to perform this action. Check your account scopes in the dashboard. |
+| `500` | **Internal Server Error** — an unexpected error occurred on AfroPay's side. Retry using exponential backoff before escalating. |
+
+<Warning>
+  Do **not** re-submit a C2B or B2C request on a `500` error without first querying the transaction status endpoint. The original request may have been accepted before the error occurred, and a duplicate submission could result in a double charge.
+</Warning>
+
+---
+
+The sidebar contains individual endpoint pages auto-generated from the OpenAPI specification. Each page includes full request/response schemas, field-level descriptions, and runnable examples you can try directly in the browser.

@@ -1,0 +1,115 @@
+---
+title: "AfroPay Quickstart: Make Your First C2B Collection"
+sidebarTitle: "Quickstart"
+description: "Collect from an M-PESA wallet using the AfroPay sandbox in four steps: get a token, initiate a collection, receive a webhook, and check status."
+---
+
+This guide walks you through collecting from a customer's M-PESA wallet using the AfroPay sandbox, end to end, in four steps. By the time you finish, you'll have obtained an access token, initiated a real C2B request, received a webhook callback, and learned how to poll for transaction status if you need it.
+
+## Prerequisites
+
+Before you begin, make sure you have the following in place.
+
+<Steps>
+  <Step title="Get sandbox credentials">
+    Log in to the AfroPay dashboard and retrieve your sandbox `client_id` and `client_secret`. You'll use these to request an access token in Step 1.
+  </Step>
+  <Step title="Expose a webhook endpoint">
+    Prepare a publicly reachable URL that accepts `POST` requests — this is your `notificationUrl`. For local development, tools like [ngrok](https://ngrok.com) can create a secure tunnel to your machine in seconds.
+  </Step>
+</Steps>
+
+## 1. Get an access token
+
+Exchange your sandbox credentials for a short-lived JWT. The snippet below stores the token in an environment variable so you can reference it in subsequent requests.
+
+```bash
+export ACCESS_TOKEN=$(curl -s -X POST https://api-sandbox.afro-pay.africa/oauth/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials" \
+  -d "client_id=$AFROPAY_CLIENT_ID" \
+  -d "client_secret=$AFROPAY_CLIENT_SECRET" | jq -r .access_token)
+```
+
+The token expires after 3,600 seconds. See [Authentication](/authentication) for caching guidance.
+
+## 2. Initiate the collection
+
+Send a `POST` request to `/api/v1/c2b` with the transaction details. Replace the `notificationUrl` value with the webhook endpoint you set up in the prerequisites.
+
+```bash
+curl -X POST https://api-sandbox.afro-pay.africa/api/v1/c2b \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transactionId": "ORD-2026-0001",
+    "amount": 1500.00,
+    "currency": "KES",
+    "msisdn": "254712345678",
+    "paymentMethodCode": "M-PESA",
+    "countryCode": "KEN",
+    "narration": "Payment for order ORD-2026-0001",
+    "notificationUrl": "https://merchant.example.com/webhooks/afropay"
+  }'
+```
+
+A `status` of `00` confirms that AfroPay accepted your request. Hold on to the `retrievalReferenceNo` — you'll use it to correlate the incoming webhook and to poll for status if needed.
+
+```json
+{
+  "status": "00",
+  "message": "Payment request received",
+  "data": {
+    "retrievalReferenceNo": "RRN-7F3A9C2B10",
+    "merchantReferenceId": "ORD-2026-0001"
+  }
+}
+```
+
+<Note>
+  At this point the customer receives an STK push on their phone prompting them to enter their M-PESA PIN. Nothing has been collected yet — wait for the webhook before marking the order as paid.
+</Note>
+
+## 3. Receive the result
+
+When the customer approves the payment (or the transaction fails for any reason), AfroPay POSTs the final outcome to your `notificationUrl`:
+
+```json
+{
+  "status": "00",
+  "message": "Transaction SUCCESS",
+  "data": {
+    "transactionStatus": "SUCCESS",
+    "merchantReferenceId": "ORD-2026-0001",
+    "retrievalReferenceId": "RRN-7F3A9C2B10",
+    "processorResponseCode": "0",
+    "processorApprovalCode": "QABC123XYZ"
+  }
+}
+```
+
+Respond with a `2xx` status code to acknowledge receipt. If AfroPay does not receive a `2xx`, it will retry the webhook. See [Webhooks](/guides/webhooks) for full details on delivery attempts and retry behavior.
+
+## 4. Poll for status (optional)
+
+If your webhook endpoint was unreachable or you simply want to check the current state of a transaction on demand, query the status endpoint directly using the `retrievalReferenceNo` from Step 2:
+
+```bash
+curl https://api-sandbox.afro-pay.africa/api/v1/transaction/RRN-7F3A9C2B10
+```
+
+This endpoint is public — no `Authorization` header is required.
+
+## What's next
+
+Now that you've completed your first collection, explore the full reference for each flow.
+
+<CardGroup cols={2}>
+  <Card title="C2B Collections" icon="arrow-down-to-line" href="/guides/c2b-collections">
+    The complete collection flow, all request fields, and error codes.
+  </Card>
+
+  <Card title="B2C Payouts" icon="arrow-up-from-line" href="/guides/b2c-payouts">
+    Disburse funds to customer wallets for refunds, payroll, and more.
+  </Card>
+</CardGroup>

@@ -1,0 +1,71 @@
+{
+  "projectType": "api-service",
+  "projectName": "AfroPay",
+  "projectDescription": "A mobile money API that lets businesses collect payments from and disburse funds to customer wallets across Africa via a single, consistent interface.",
+  "theme": "luma",
+  "primaryColor": "#1be39b",
+  "lightColor": "#0c8c5c",
+  "darkColor": "#040404",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "authentication",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/c2b-collections",
+              "guides/b2c-payouts",
+              "guides/transaction-lifecycle",
+              "guides/webhooks"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api-reference/introduction"
+            ]
+          },
+          {
+            "group": "Endpoints",
+            "pages": [
+              "api-reference/endpoints/collect",
+              "api-reference/endpoints/payout",
+              "api-reference/endpoints/get-transaction"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "C2B (Customer-to-Business) collections via STK push / USSD",
+    "B2C (Business-to-Customer) payouts to mobile wallets and bank accounts",
+    "Asynchronous transaction processing with webhook notifications",
+    "Transaction status polling via retrievalReferenceNo",
+    "Support for M-PESA, Airtel Money, and other African mobile money providers",
+    "OAuth2 client credentials authentication",
+    "Sandbox environment for testing",
+    "Idempotent request handling via merchant transactionId"
+  ],
+  "publicApiSurface": [
+    "POST /api/v1/c2b — Initiate a Customer-to-Business collection",
+    "POST /api/v1/b2c — Initiate a Business-to-Customer payout",
+    "GET /api/v1/transaction/{referenceId} — Get transaction status (public)",
+    "POST /oauth/token — Obtain an OAuth2 bearer token",
+    "Webhook: POST notificationUrl — Receive final transaction outcome"
+  ]
+}

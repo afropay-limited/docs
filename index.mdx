@@ -1,0 +1,50 @@
+---
+title: "AfroPay API — Mobile Money Collections and Payouts"
+sidebarTitle: "Home"
+description: "AfroPay connects your business to M-PESA, Airtel Money, and more via a single REST API. Collect payments and disburse funds in minutes."
+---
+
+AfroPay gives your business a single REST API to move money across Africa's most popular mobile money networks — including M-PESA and Airtel Money. Whether you need to collect payments from customers (C2B) or pay out funds to their wallets (B2C), AfroPay handles the network complexity so you can focus on building your product.
+
+<CardGroup cols={2}>
+  <Card title="Introduction" icon="book-open" href="/introduction">
+    Understand the two core payment flows — C2B collections and B2C payouts — and how AfroPay connects them.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Run your first collection in minutes with step-by-step instructions and ready-to-use code samples.
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Explore the full endpoint reference complete with request schemas, response examples, and error codes.
+  </Card>
+  <Card title="Webhooks" icon="bolt" href="/guides/webhooks">
+    Receive real-time payment notifications delivered straight to your server as events occur.
+  </Card>
+</CardGroup>
+
+## How to get started
+
+<Steps>
+  <Step title="Get your credentials">
+    Sign in to the [AfroPay dashboard](https://dashboard.afropay.io) and retrieve your `client_id` and `client_secret` from the **API Keys** section of your account settings.
+  </Step>
+  <Step title="Authenticate">
+    Exchange your credentials for a short-lived OAuth2 bearer token by calling `POST /oauth/token`. Include this token in the `Authorization` header of every subsequent request.
+  </Step>
+  <Step title="Make your first API call">
+    Initiate a collection by calling `POST /api/v1/c2b` with the customer's phone number, amount, and currency. AfroPay routes the request to the correct mobile money network automatically.
+  </Step>
+  <Step title="Handle the result">
+    Receive the final payment outcome in real time via a webhook event sent to your registered callback URL, or poll `GET /api/v1/transaction/{referenceId}` for the current status.
+  </Step>
+</Steps>
+
+## Core payment flows
+
+<CardGroup cols={2}>
+  <Card title="C2B Collections" icon="arrow-down-to-line" href="/guides/c2b-collections">
+    Pull funds from a customer's mobile wallet — perfect for checkout, subscriptions, and bill payments.
+  </Card>
+  <Card title="B2C Payouts" icon="arrow-up-from-line" href="/guides/b2c-payouts">
+    Push funds directly to a customer's mobile wallet for disbursements, refunds, and salary payments.
+  </Card>
+</CardGroup>

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "AfroPay",
+  "theme": "luma",
+  "colors": {
+    "primary": "#1be39b",
+    "light": "#0c8c5c",
+    "dark": "#040404"
+  },
+  "logo": {
+    "light": "/images/WhiteLogo1.svg",
+    "dark": "/images/WhiteLogo2.svg"
+  },
+  "favicon": "https://media.brand.dev/26d46f3d-dd05-44da-865d-61a4f9c59cdb.jpg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "authentication",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/c2b-collections",
+              "guides/b2c-payouts",
+              "guides/transaction-lifecycle",
+              "guides/webhooks"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api-reference/introduction"
+            ]
+          },
+          {
+            "group": "Endpoints",
+            "openapi": "api-reference/openapi.yaml"
+          }
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Support",
+        "href": "mailto:developers@afropay.africa"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Dashboard",
+      "href": "https://dashboard.afropay.africa"
+    }
+  },
+  "footer": {
+    "socials": {}
+  }
+}

@@ -1,0 +1,67 @@
+---
+title: "AfroPay Mobile Money API — Collections and Payouts"
+sidebarTitle: "Introduction"
+description: "AfroPay gives your business a single REST API to collect from and pay out to mobile wallets across Africa, including M-PESA and Airtel Money."
+---
+
+AfroPay is a single REST API that lets your business move money across African mobile money networks — including M-PESA and Airtel Money — without integrating with each provider individually. It exposes two core flows: **C2B (Collections)**, where you pull funds from a customer's wallet into your account, and **B2C (Payouts)**, where you push funds out to a customer's wallet. Both flows are fully asynchronous, meaning a successful initial response confirms only that your request was accepted, not that the money has moved.
+
+<CardGroup cols={2}>
+  <Card title="C2B — Collections" icon="arrow-down-to-line" href="/guides/c2b-collections">
+    **Customer-to-Business.** Pull funds from a customer's wallet into your account. The customer approves the debit on their handset via STK push or USSD.
+  </Card>
+
+  <Card title="B2C — Payouts" icon="arrow-up-from-line" href="/guides/b2c-payouts">
+    **Business-to-Customer.** Push funds from your account out to a customer's wallet — refunds, disbursements, supplier settlements, and payroll.
+  </Card>
+</CardGroup>
+
+## How it works
+
+Both flows follow the same three-step shape, from initiation through to final notification.
+
+<Steps>
+  <Step title="Initiate">
+    Call `POST /api/v1/c2b` (for collections) or `POST /api/v1/b2c` (for payouts) with the amount, currency, and the customer's mobile number. AfroPay validates the request and returns a `retrievalReferenceNo` you can use to track the transaction.
+  </Step>
+  <Step title="Process">
+    AfroPay routes the transaction to the appropriate mobile money provider. For C2B collections, the customer receives an STK push and is prompted to authorize the debit on their phone.
+  </Step>
+  <Step title="Get notified">
+    When the transaction reaches a terminal state, AfroPay POSTs the result to your `notificationUrl`. You can also poll [`GET /api/v1/transaction/{referenceId}`](/api-reference/transactions/get-transaction-status) at any time to check the current status.
+  </Step>
+</Steps>
+
+<Note>
+  These endpoints are **asynchronous**. The immediate HTTP response only acknowledges that your request was accepted — it does **not** mean the money has moved. Always rely on the [webhook](/guides/webhooks) or a [status query](/guides/transaction-lifecycle) for the final outcome.
+</Note>
+
+## Environments
+
+AfroPay provides a sandbox environment for integration and testing, and a production environment for live transactions. Use the appropriate base URL for each.
+
+| Environment | Base URL |
+| --- | --- |
+| Production | `https://api.afro-pay.africa` |
+| Sandbox | `https://api-sandbox.afro-pay.africa` |
+
+## Supported networks
+
+AfroPay currently supports the following mobile money networks. Specify the network using the `paymentMethodCode` field in your request, paired with the appropriate ISO 3166-1 alpha-3 `countryCode`.
+
+| Network | `paymentMethodCode` | Example `countryCode` |
+| --- | --- | --- |
+| M-PESA | `M-PESA` | `KEN` |
+| Airtel Money | `AIRTEL` | `UGA` |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Authenticate" icon="key" href="/authentication">
+    Get an OAuth2 access token to authorize your API requests.
+  </Card>
+
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Run your first collection end to end in minutes.
+  </Card>
+</CardGroup>

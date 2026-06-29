@@ -1,0 +1,122 @@
+---
+title: "Webhooks: Receive Real-Time AfroPay Payment Outcomes"
+sidebarTitle: "Webhooks"
+description: "AfroPay POSTs the final outcome of every transaction to your notificationUrl. Learn the payload format, how to respond, and retry behavior."
+---
+
+Because C2B and B2C transactions are asynchronous, AfroPay delivers the final outcome of each transaction to the `notificationUrl` you supply when initiating it. Webhooks are the recommended way to confirm payment success or failure in real time — polling the status endpoint should be used only as a backstop when a webhook has not arrived.
+
+## When AfroPay calls you
+
+After the mobile money provider confirms a terminal state for a transaction, AfroPay persists the result and immediately sends an HTTP `POST` to your `notificationUrl`. This happens for both successful and failed transactions — you will receive a notification regardless of the outcome, so you can handle failures just as promptly as successes.
+
+## Webhook payload
+
+The body follows the same envelope used across the AfroPay API: a top-level `status`, a human-readable `message`, and a `data` object containing the transaction detail.
+
+```json
+{
+  "status": "00",
+  "message": "Transaction SUCCESS",
+  "data": {
+    "transactionStatus": "SUCCESS",
+    "merchantReferenceId": "ORD-2026-0001",
+    "retrievalReferenceId": "RRN-7F3A9C2B10",
+    "processorResponseCode": "0",
+    "processorApprovalCode": "QABC123XYZ",
+    "failureReason": null,
+    "failureMessage": null
+  }
+}
+```
+
+### Payload fields
+
+<ResponseField name="status" type="string">
+  `"00"` when the transaction succeeded, `"01"` otherwise. Derived from `data.transactionStatus` — present for quick top-level filtering, but always read `data.transactionStatus` for the authoritative lifecycle state.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Human-readable summary of the outcome, e.g. `"Transaction SUCCESS"` or `"Transaction FAILED"`.
+</ResponseField>
+
+<ResponseField name="data.transactionStatus" type="string">
+  The terminal lifecycle flag for this transaction. One of `SUCCESS`, `FAILED`, or `INDETERMINATE`. See the [Transaction Lifecycle](/guides/transaction-lifecycle) guide for the full definition of each state.
+</ResponseField>
+
+<ResponseField name="data.merchantReferenceId" type="string">
+  Your original `transactionId`, echoed back. Use this to look up and update the matching record in your system.
+</ResponseField>
+
+<ResponseField name="data.retrievalReferenceId" type="string">
+  AfroPay's `retrievalReferenceNo` for the transaction. Use this to cross-reference with AfroPay's records or when contacting support.
+</ResponseField>
+
+<ResponseField name="data.processorResponseCode" type="string">
+  The raw response code returned by the underlying mobile money provider.
+</ResponseField>
+
+<ResponseField name="data.processorApprovalCode" type="string">
+  The provider's confirmation or approval code. Present on successful transactions; `null` on failure.
+</ResponseField>
+
+<ResponseField name="data.failureReason" type="string">
+  A short, machine-oriented reason code for the failure. Present when `transactionStatus` is `FAILED`; `null` otherwise.
+</ResponseField>
+
+<ResponseField name="data.failureMessage" type="string">
+  A human-readable description of the failure. Present when `transactionStatus` is `FAILED`; `null` otherwise.
+</ResponseField>
+
+## Handling webhooks
+
+Your webhook handler should look up the order by `merchantReferenceId`, act on the `transactionStatus` idempotently, and return a `2xx` response as quickly as possible. The example below shows a minimal Express handler:
+
+```javascript
+app.post("/webhooks/afropay", (req, res) => {
+  const { data } = req.body;
+
+  // 1. Look up the order using your own transactionId, echoed back as merchantReferenceId.
+  const order = lookupByReference(data.merchantReferenceId);
+
+  if (!order) {
+    // Unknown reference — acknowledge anyway to prevent retries for junk traffic.
+    return res.sendStatus(200);
+  }
+
+  // 2. Act on the terminal state idempotently — guard against duplicate webhooks.
+  if (data.transactionStatus === "SUCCESS" && order.status !== "fulfilled") {
+    fulfil(order);
+  } else if (data.transactionStatus === "FAILED" && order.status !== "cancelled") {
+    cancel(order);
+  }
+  // INDETERMINATE: quarantine and reconcile manually — do not auto-retry.
+
+  // 3. Return 200 to acknowledge delivery.
+  res.sendStatus(200);
+});
+```
+
+## Delivery and retries
+
+AfroPay marks a notification as **delivered** only when your endpoint returns a `2xx` response. Keep the following practices in mind:
+
+- **Return any `2xx` to acknowledge.** A non-`2xx` response — or a connection timeout — causes the delivery to be recorded as failed and scheduled for retry later.
+- **Be idempotent.** Key all processing on `merchantReferenceId` so that receiving the same webhook more than once is a harmless no-op. You **will** receive duplicates if your endpoint is slow or returns an error on the first attempt.
+- **Acknowledge fast.** Return `2xx` immediately and do any heavy processing (database writes, downstream API calls, email sending) asynchronously. A slow response risks AfroPay treating the request as a failure and retrying.
+- **Reconcile as a backstop.** If a webhook never arrives — because your endpoint was down or the `notificationUrl` was unreachable — poll `GET /api/v1/transaction/{referenceId}` to retrieve the current state.
+
+<Note>
+  A webhook is only sent when you provide a `notificationUrl` at the time of initiating the transaction. If you omit `notificationUrl`, or if your endpoint is permanently unreachable, fall back to [status polling](/guides/transaction-lifecycle#polling-for-status) to determine the outcome.
+</Note>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Transaction Lifecycle" icon="arrows-rotate" href="/guides/transaction-lifecycle">
+    Understand the five states a transaction moves through and how to poll for status.
+  </Card>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Follow the end-to-end quickstart to make your first live collection or payout.
+  </Card>
+</CardGroup>

@@ -1,0 +1,391 @@
+openapi: 3.1.0
+info:
+  title: AfroPay Mobile Money API
+  version: 1.0.0
+  description: |
+    The AfroPay Mobile Money API lets you move money between your customers and
+    your business over mobile money rails (M-PESA, Airtel Money, and others).
+
+    Two flows are exposed:
+
+    - **C2B (Collections)** — Customer-to-Business. Pull funds from a customer's
+      mobile wallet into your account. The customer approves the debit on their
+      handset (STK push / USSD).
+    - **B2C (Payouts)** — Business-to-Customer. Push funds from your account out
+      to a customer's mobile wallet.
+
+    Both flows are **asynchronous**. The synchronous response only acknowledges
+    that the request was accepted; the final result is delivered to your
+    `notificationUrl` webhook and can also be polled with the transaction status
+    endpoint.
+servers:
+  - url: https://payment-gateway.descartes.solutions
+    description: Production
+  - url: https://api-sandbox.afro-pay.africa
+    description: Sandbox
+security:
+  - bearerAuth: []
+tags:
+  - name: Collections (C2B)
+    description: Pull funds from a customer wallet into your account.
+  - name: Payouts (B2C)
+    description: Push funds from your account to a customer wallet.
+  - name: Transactions
+    description: Query the status of a transaction.
+paths:
+  /api/v1/c2b:
+    post:
+      tags:
+        - Collections (C2B)
+      summary: Collect from a customer (C2B)
+      operationId: collect
+      description: |
+        Initiates a Customer-to-Business collection. AfroPay triggers an STK push
+        (or USSD prompt) to the customer's handset. The customer authorizes the
+        debit, and the final outcome is delivered to your `notificationUrl`.
+
+        The response here is an **acknowledgement only** — a `00` status means the
+        request was accepted and is being processed, not that the funds have moved.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/C2bRequest'
+            examples:
+              mpesa:
+                summary: M-PESA collection in Kenya
+                value:
+                  transactionId: ORD-2026-0001
+                  amount: 1500.00
+                  currency: KES
+                  msisdn: '254712345678'
+                  paymentMethodCode: M-PESA
+                  countryCode: KEN
+                  narration: Payment for order ORD-2026-0001
+                  notificationUrl: https://merchant.example.com/webhooks/afropay
+      responses:
+        '200':
+          description: Request accepted (or rejected) — inspect `status`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitiateResponse'
+              examples:
+                accepted:
+                  summary: Accepted
+                  value:
+                    status: '00'
+                    message: Payment request received
+                    data:
+                      retrievalReferenceNo: RRN-7F3A9C2B10
+                      merchantReferenceId: ORD-2026-0001
+                rejected:
+                  summary: Rejected
+                  value:
+                    status: '01'
+                    message: 'Payment request failed: invalid payment method'
+                    data: null
+  /api/v1/b2c:
+    post:
+      tags:
+        - Payouts (B2C)
+      summary: Pay out to a customer (B2C)
+      operationId: payout
+      description: |
+        Initiates a Business-to-Customer payout. AfroPay disburses funds from your
+        account to the recipient's mobile wallet. The final outcome is delivered to
+        your `notificationUrl`.
+
+        The response here is an **acknowledgement only** — a `00` status means the
+        request was accepted and is being processed, not that the funds have settled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/B2cRequest'
+            examples:
+              mpesa:
+                summary: M-PESA payout in Kenya
+                value:
+                  transactionId: PAYOUT-2026-0042
+                  amount: 5000.00
+                  currency: KES
+                  recipientMsisdn: '254712345678'
+                  recipientName: Jane Wanjiru
+                  paymentMethodCode: M-PESA
+                  countryCode: KEN
+                  narration: Supplier settlement
+                  notificationUrl: https://merchant.example.com/webhooks/afropay
+      responses:
+        '200':
+          description: Request accepted (or rejected) — inspect `status`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitiateResponse'
+              examples:
+                accepted:
+                  summary: Accepted
+                  value:
+                    status: '00'
+                    message: Payout request received
+                    data:
+                      retrievalReferenceNo: RRN-3B1E88A402
+                      merchantReferenceId: PAYOUT-2026-0042
+  /api/v1/transaction/{referenceId}:
+    get:
+      tags:
+        - Transactions
+      summary: Get transaction status
+      operationId: getTransaction
+      security: []
+      description: |
+        Returns the current state of a transaction by its `retrievalReferenceNo`
+        (the `referenceId` path parameter). Use this to poll for a terminal state
+        if you have not received the webhook, or to reconcile.
+      parameters:
+        - name: referenceId
+          in: path
+          required: true
+          description: The `retrievalReferenceNo` returned when the transaction was initiated.
+          schema:
+            type: string
+          example: RRN-7F3A9C2B10
+      responses:
+        '200':
+          description: The transaction record.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+              examples:
+                success:
+                  value:
+                    status: '00'
+                    message: Success
+                    data:
+                      amount: 1500.00
+                      currencyCode: KES
+                      merchantReferenceId: ORD-2026-0001
+                      retrievalReferenceNo: RRN-7F3A9C2B10
+                      flag: SUCCESS
+                      providerCode: SASAPAY
+                      billingMobileNumber: '254712345678'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        OAuth2 client-credentials access token (JWT) issued by the AfroPay
+        authorization server. Send it as `Authorization: Bearer <token>`.
+  schemas:
+    C2bRequest:
+      type: object
+      required:
+        - transactionId
+        - amount
+        - currency
+        - msisdn
+        - paymentMethodCode
+        - countryCode
+      properties:
+        transactionId:
+          type: string
+          description: Your unique reference for this transaction. Echoed back as `merchantReferenceId`.
+          example: ORD-2026-0001
+        amount:
+          type: number
+          description: Amount to collect, in the major unit of the currency.
+          example: 1500.00
+        currency:
+          type: string
+          description: ISO 4217 currency code.
+          example: KES
+        msisdn:
+          type: string
+          description: Customer's mobile number in international format (no `+`).
+          example: '254712345678'
+        paymentMethodCode:
+          type: string
+          description: Mobile money network. Resolved together with `countryCode`.
+          enum: [M-PESA, AIRTEL]
+          example: M-PESA
+        countryCode:
+          type: string
+          description: ISO 3166-1 alpha-3 country code.
+          example: KEN
+        narration:
+          type: string
+          description: Optional free-text description shown on statements.
+          example: Payment for order ORD-2026-0001
+        notificationUrl:
+          type: string
+          format: uri
+          description: Webhook URL that receives the final transaction result.
+          example: https://merchant.example.com/webhooks/afropay
+    B2cRequest:
+      type: object
+      required:
+        - transactionId
+        - amount
+        - currency
+        - recipientMsisdn
+        - paymentMethodCode
+        - countryCode
+      properties:
+        transactionId:
+          type: string
+          description: Your unique reference for this payout. Echoed back as `merchantReferenceId`.
+          example: PAYOUT-2026-0042
+        amount:
+          type: number
+          example: 5000.00
+        currency:
+          type: string
+          example: KES
+        recipientMsisdn:
+          type: string
+          description: Recipient's mobile number in international format (no `+`).
+          example: '254712345678'
+        recipientName:
+          type: string
+          description: Optional recipient name.
+          example: Jane Wanjiru
+        paymentMethodCode:
+          type: string
+          enum: [M-PESA, AIRTEL]
+          example: M-PESA
+        bankCode:
+          type: string
+          description: Optional bank code, when paying out to a bank rather than a wallet.
+        countryCode:
+          type: string
+          example: KEN
+        narration:
+          type: string
+          example: Supplier settlement
+        notificationUrl:
+          type: string
+          format: uri
+          example: https://merchant.example.com/webhooks/afropay
+    InitiateResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          description: '`00` = accepted, `01` = rejected.'
+          enum: ['00', '01']
+        message:
+          type: string
+        data:
+          oneOf:
+            - $ref: '#/components/schemas/InitiateData'
+            - type: 'null'
+    InitiateData:
+      type: object
+      properties:
+        retrievalReferenceNo:
+          type: string
+          description: AfroPay's reference for the transaction. Use it to poll status and correlate webhooks.
+          example: RRN-7F3A9C2B10
+        merchantReferenceId:
+          type: string
+          description: Your `transactionId`, echoed back.
+          example: ORD-2026-0001
+    TransactionResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: '00'
+        message:
+          type: string
+          example: Success
+        data:
+          $ref: '#/components/schemas/TransactionView'
+    TransactionView:
+      type: object
+      properties:
+        amount:
+          type: number
+          example: 1500.00
+        currencyCode:
+          type: string
+          example: KES
+        merchantReferenceId:
+          type: string
+          example: ORD-2026-0001
+        retrievalReferenceNo:
+          type: string
+          example: RRN-7F3A9C2B10
+        flag:
+          $ref: '#/components/schemas/TransactionFlag'
+        providerCode:
+          type: string
+          example: SASAPAY
+        billingMobileNumber:
+          type: string
+          example: '254712345678'
+        billingFirstName:
+          type: string
+        billingLastName:
+          type: string
+        billingEmail:
+          type: string
+        billingCountry:
+          type: string
+    TransactionFlag:
+      type: string
+      description: |
+        Transaction lifecycle state.
+        - `INITIATED` — request created, not yet sent to the customer/provider.
+        - `PENDING` — awaiting customer action or provider confirmation.
+        - `SUCCESS` — funds moved (terminal).
+        - `FAILED` — declined or errored (terminal).
+        - `INDETERMINATE` — provider outcome unknown; requires reconciliation.
+      enum:
+        - INITIATED
+        - PENDING
+        - SUCCESS
+        - FAILED
+        - INDETERMINATE
+    WebhookNotification:
+      type: object
+      description: |
+        Payload AfroPay POSTs to your `notificationUrl` when a transaction reaches
+        a terminal (or updated) state.
+      properties:
+        status:
+          type: string
+          description: '`00` if `transactionStatus` is `SUCCESS`, otherwise `01`.'
+          enum: ['00', '01']
+        message:
+          type: string
+          example: Transaction SUCCESS
+        data:
+          $ref: '#/components/schemas/WebhookData'
+    WebhookData:
+      type: object
+      properties:
+        transactionStatus:
+          $ref: '#/components/schemas/TransactionFlag'
+        merchantReferenceId:
+          type: string
+          example: ORD-2026-0001
+        retrievalReferenceId:
+          type: string
+          example: RRN-7F3A9C2B10
+        processorResponseCode:
+          type: string
+          description: Raw response code from the underlying provider.
+        processorApprovalCode:
+          type: string
+          description: Provider approval code, when successful.
+        failureReason:
+          type: string
+        failureMessage:
+          type: string

@@ -1,0 +1,83 @@
+---
+title: "Authenticating with the AfroPay API Using OAuth2 Tokens"
+sidebarTitle: "Authentication"
+description: "AfroPay uses OAuth2 client credentials to issue short-lived JWTs. Learn how to obtain a token and attach it to every API request you make."
+---
+
+AfroPay protects its collection and payout endpoints with **OAuth2 client credentials**. Every request you make to `POST /api/v1/c2b` and `POST /api/v1/b2c` must include a valid bearer token in the `Authorization` header. You obtain that token by exchanging your `client_id` and `client_secret` — issued to you in the AfroPay dashboard — with the authorization server.
+
+<Info>
+  The transaction status endpoint (`GET /api/v1/transaction/{referenceId}`) is **public** and does not require a token. Only the collection (`/api/v1/c2b`) and payout (`/api/v1/b2c`) endpoints require authorization.
+</Info>
+
+## Get an access token
+
+Send a `POST` request to the `/oauth/token` endpoint with your credentials formatted as `application/x-www-form-urlencoded`. The authorization server returns a short-lived JWT you can use immediately.
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api-sandbox.afro-pay.africa/oauth/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials" \
+  -d "client_id=$AFROPAY_CLIENT_ID" \
+  -d "client_secret=$AFROPAY_CLIENT_SECRET"
+```
+
+```javascript Node.js
+const res = await fetch("https://api-sandbox.afro-pay.africa/oauth/token", {
+  method: "POST",
+  headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  body: new URLSearchParams({
+    grant_type: "client_credentials",
+    client_id: process.env.AFROPAY_CLIENT_ID,
+    client_secret: process.env.AFROPAY_CLIENT_SECRET,
+  }),
+});
+
+const { access_token } = await res.json();
+```
+
+</CodeGroup>
+
+A successful response returns the token and its lifetime in seconds:
+
+```json
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer",
+  "expires_in": 3600
+}
+```
+
+## Use the token
+
+Include the token on every protected request by setting the `Authorization` header to `Bearer <access_token>`. The gateway validates the JWT against the authorization server and derives your application identity from the token — you never need to pass your `client_id` in the request body.
+
+```bash
+curl -X POST https://payment-gateway.descartes.solutions/api/v1/c2b \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ ... }'
+```
+
+## Token lifecycle
+
+Tokens issued by AfroPay expire after **3,600 seconds (1 hour)**. To keep your integration efficient and avoid unnecessary latency, follow these practices:
+
+- **Cache the token** in memory (or a fast store like Redis) and reuse it across requests for the duration of its lifetime.
+- **Refresh proactively** — request a new token a short time before `expires_in` elapses, rather than waiting for a `401` response.
+- **Never request a new token per API call** — doing so adds avoidable round-trip latency and may trigger rate limits.
+
+<Warning>
+  Never expose your `client_secret` in browser or mobile client code. If your secret is compromised, rotate it immediately in the AfroPay dashboard. All tokens issued against the old secret will be invalidated.
+</Warning>
+
+## Error responses
+
+If a request arrives with a missing, malformed, or expired token, the API returns one of the following errors:
+
+| HTTP Status | Meaning |
+| --- | --- |
+| `401 Unauthorized` | The token is missing, malformed, or has expired. Request a new token and retry. |
+| `403 Forbidden` | The token is valid but your application does not have permission to perform the requested action. Contact AfroPay support to review your account scopes. |
